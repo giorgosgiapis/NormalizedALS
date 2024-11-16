@@ -15,7 +15,7 @@ but any reasonably recent version should work.
 ### How to run:
 To build the project, run:
 ```
-sbt clen compile package
+sbt clean compile package
 ```
 To run it, use:
 ```
