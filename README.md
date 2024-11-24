@@ -13,7 +13,11 @@ To build the project, `sbt` is required. The version used here is 1.10.1
 but any reasonably recent version should work.
 
 ### How to run:
-To build the project, run:
+To build the project, first do:
+```
+sbt update
+```
+To install spark. Then run:
 ```
 sbt clean compile package
 ```
