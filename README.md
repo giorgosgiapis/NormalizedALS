@@ -1,6 +1,6 @@
 ## Personalized PageRank with ALS
 
-TODO: Add description
+Test
 
 ### Requirements:
 The Java, Scala and Spark versions used here are the same as the ones 
