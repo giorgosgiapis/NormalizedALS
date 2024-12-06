@@ -2,28 +2,21 @@ package ca.uwaterloo.cs651project
 
 import breeze.linalg.DenseVector
 import breeze.stats.distributions.Multinomial
+import org.apache.log4j._
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.rogach.scallop._
 
-import scala.sys.process._
-import org.apache.log4j._
-
+import java.io.{BufferedWriter, FileWriter}
 import java.nio.file.Paths
 import scala.collection.mutable
+import scala.sys.process._
 import scala.util.Random
 
 class Conf(args: Seq[String]) extends ScallopConf(args) {
-  val log = Logger.getLogger(getClass.getName)
-  private def getData: String = {
-    log.info("Downloading data from MovieLens")
-    val scriptPath = Paths.get("move_data_to_hdfs.sh").toAbsolutePath.toString
-    Process(scriptPath).!
-    "data/ratings.csv"
-  }
-  mainOptions = Seq(data)
-  val data = opt[String](descr = "Path for the data", required = false, default = Some(getData))
+  mainOptions = Seq(size)
+  val size = opt[String](descr = "MoviLens dataset (small/large)", required = false, default = Some("small"))
   verify()
 }
 
@@ -31,6 +24,13 @@ class Conf(args: Seq[String]) extends ScallopConf(args) {
 object MovieLens {
   val RATING_THRESHOLD = 120
   val MAX_ITER = 100000
+
+  private def getData(dataset: String): String = {
+    val scriptPath = Paths.get("move_data_to_hdfs.sh").toAbsolutePath.toString
+    val cmd = Seq(scriptPath, dataset)
+    Process(cmd).!
+    s"data_$dataset/ratings.csv"
+  }
 
   private def stddev(seq: Seq[Double]): Double = {
     val mean = seq.sum / seq.length
@@ -73,15 +73,19 @@ object MovieLens {
   }
 
   def main(argv: Array[String]): Unit = {
+    val log = Logger.getLogger(getClass.getName)
     val args = new Conf(argv)
     val spark = SparkSession.builder()
       .appName("movielens")
       .config("spark.master", "local")
       .getOrCreate()
 
+    log.info(s"Getting data (${args.size} - this may take a while")
+    val dataPath = getData(args.size())
+
     import spark.implicits._
 
-    val df = spark.read.option("header", "true").option("inferSchema", "true").csv(args.data())
+    val df = spark.read.option("header", "true").option("inferSchema", "true").csv(dataPath)
 
     val counts = df.groupBy("movieId").agg(count("*").alias("count"))
     val reduced_counts = counts.filter($"count" > RATING_THRESHOLD)
@@ -163,14 +167,20 @@ object MovieLens {
       (n, mse_2)
     }
 
-    println("Mean Squared Errors using Sample Mean Estimation (s_1):")
+    var filePath = "sample_mean_mse.txt"
+    var fileWriter = new BufferedWriter(new FileWriter(filePath))
+    log.info("Writing Mean Squared Errors using Sample Mean Estimation")
     s_1.foreach { case (n, mse) =>
-      println(s"Sample Size $n: MSE = $mse")
+      fileWriter.write(s"$n\t$mse\n")
     }
+    fileWriter.close()
 
-    println("\nMean Squared Errors using Rejection Sampling Estimation (s_2):")
+    filePath = "rejection_sampling_mse.txt"
+    fileWriter = new BufferedWriter(new FileWriter(filePath))
+    log.info("Writing Mean Squared Errors using Rejection Sampling Estimation")
     s_2.foreach { case (n, mse) =>
-      println(s"Sample Size $n: MSE = $mse")
+      fileWriter.write(s"$n\t$mse\n")
     }
+    fileWriter.close()
   }
 }
