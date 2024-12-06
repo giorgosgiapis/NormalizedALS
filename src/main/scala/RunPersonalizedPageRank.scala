@@ -77,7 +77,6 @@ object MovieLens {
     val args = new Conf(argv)
     val spark = SparkSession.builder()
       .appName("movielens")
-      .config("spark.master", "local")
       .getOrCreate()
 
     log.info(s"Getting data (${args.size} - this may take a while")
