@@ -22,6 +22,7 @@ class Conf(args: Seq[String]) extends ScallopConf(args) {
 
 
 object MovieLens {
+  val log = Logger.getLogger(getClass.getName)
   val RATING_THRESHOLD = 120
   val MAX_ITER = 100000
 
@@ -73,7 +74,6 @@ object MovieLens {
   }
 
   def main(argv: Array[String]): Unit = {
-    val log = Logger.getLogger(getClass.getName)
     val args = new Conf(argv)
     val spark = SparkSession.builder()
       .appName("movielens")
