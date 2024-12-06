@@ -8,7 +8,7 @@ libraryDependencies ++= Seq(
 	"org.apache.spark" %% "spark-core" % sparkVersion,
 	"org.apache.spark" %% "spark-sql" % sparkVersion,
 	"org.apache.spark" %% "spark-graphx" % sparkVersion,
-	"org.rogach" % "scallop_2.11" % "3.0.1"
+	"org.rogach" % "scallop_2.11" % "3.0.1" % "provided",
 )
 
 resolvers += Resolver.mavenCentral
