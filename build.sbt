@@ -8,7 +8,7 @@ libraryDependencies ++= Seq(
 	"org.apache.spark" %% "spark-core" % sparkVersion,
 	"org.apache.spark" %% "spark-sql" % sparkVersion,
 	"org.apache.spark" %% "spark-graphx" % sparkVersion,
-	"org.rogach" % "scallop_2.11" % "3.0.1" % "provided",
+	"org.rogach" % "scallop_2.11" % "3.0.1"
 )
 
 resolvers += Resolver.mavenCentral
@@ -18,3 +18,10 @@ lazy val root = (project in file("."))
     name := "PersonalizedPagerankALS",
     idePackagePrefix := Some("ca.uwaterloo.cs651project")
   )
+
+enablePlugins(AssemblyPlugin)
+
+assemblyMergeStrategy in assembly := {
+	case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+	case _ => MergeStrategy.first
+}
