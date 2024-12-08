@@ -48,7 +48,6 @@ object MovieLensBaselineALS {
     } else {
       10
     }
-    var losses = List[Double]()
     for (run <- 1 to args.runs()) {
       log.info(s"Run $run")
       val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
