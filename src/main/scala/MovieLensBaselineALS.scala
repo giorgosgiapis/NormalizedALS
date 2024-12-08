@@ -72,13 +72,13 @@ object MovieLensBaselineALS {
         .setLabelCol("rating")
         .setPredictionCol("prediction")
       val mse = evaluator.evaluate(predictions)
-      losses.add(mse)
+      println(s"Run $run MSE: $mse")
     }
-    val loss_list = losses.value.toArray
-    log.info("Writing losses to baseline_losses.txt")
-    val filePath = "baseline_losses.txt"
-    val fileWriter = new BufferedWriter(new FileWriter(filePath))
-    fileWriter.write(loss_list.mkString("\n"))
-    fileWriter.close()
+//    val loss_list = losses.value.toArray
+//    log.info("Writing losses to baseline_losses.txt")
+//    val filePath = "baseline_losses.txt"
+//    val fileWriter = new BufferedWriter(new FileWriter(filePath))
+//    fileWriter.write(loss_list.mkString("\n"))
+//    fileWriter.close()
   }
 }
