@@ -48,7 +48,7 @@ object MovieLens {
     val cur_var = Array(0.0, 0.0)
     val random = new Random()
 
-    for (_ <- 1 to max_iter) {
+    for (iter <- 1 to max_iter) {
       val q = priors(random.nextInt(priors.length))
       val alpha = (0 until stats_length).map { i =>
         if (stats(i) == 0) 0.0
@@ -66,6 +66,7 @@ object MovieLens {
           cur_var(i) = m2(i) / samples
         }
         if (samples >= 100 && cur_var.forall(_ < tol * samples)) {
+          log.info(s"Converged after $iter iterations")
           return dists
         }
       }
@@ -76,7 +77,7 @@ object MovieLens {
   def main(argv: Array[String]): Unit = {
     val args = new Conf(argv)
     val spark = SparkSession.builder()
-      .appName("movielens")
+      .appName("MovieLensRejectionSampling")
       .getOrCreate()
 
     log.info(s"Getting data (${args.size} - this may take a while")
