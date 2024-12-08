@@ -5,6 +5,7 @@ import org.apache.spark.sql.SparkSession
 import org.rogach.scallop._
 import org.apache.spark.ml.recommendation.ALS
 import org.apache.spark.ml.evaluation.RegressionEvaluator
+import scala.collection.mutable.ArrayBuffer
 
 import java.io.{BufferedWriter, FileWriter}
 import java.nio.file.Paths
@@ -49,7 +50,7 @@ object MovieLensBaselineALS {
     } else {
       10
     }
-    var losses = Seq.empty[Double]
+    val losses = spark.sparkContext.collectionAccumulator[Double]("Losses")
     for (run <- 1 to args.runs()) {
       log.info(s"Run $run")
       val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
@@ -71,12 +72,13 @@ object MovieLensBaselineALS {
         .setLabelCol("rating")
         .setPredictionCol("prediction")
       val mse = evaluator.evaluate(predictions)
-      losses = losses :+ mse
+      losses.add(mse)
     }
+    val loss_list = losses.value.toArray
     log.info("Writing losses to baseline_losses.txt")
     val filePath = "baseline_losses.txt"
     val fileWriter = new BufferedWriter(new FileWriter(filePath))
-    fileWriter.write(losses.mkString("\n"))
+    fileWriter.write(loss_list.mkString("\n"))
     fileWriter.close()
   }
 }
