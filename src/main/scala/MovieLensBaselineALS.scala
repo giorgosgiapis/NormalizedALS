@@ -50,7 +50,7 @@ object MovieLensBaselineALS {
     } else {
       10
     }
-    var losses = List.empty[Double]
+    var losses = List[Double]()
     for (run <- 1 to args.runs()) {
       log.info(s"Run $run")
       val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
@@ -77,7 +77,7 @@ object MovieLensBaselineALS {
     log.info("Writing losses to baseline_losses.txt")
     val filePath = "baseline_losses.txt"
     val writer = new BufferedWriter(new FileWriter(filePath))
-    losses.foreach(l => writer.write(l + "\n"))
+    writer.write(losses.mkString("\n"))
     writer.close()
   }
 }
