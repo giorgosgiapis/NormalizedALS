@@ -50,7 +50,7 @@ object MovieLensBaselineALS {
     } else {
       10
     }
-    var losses = ArrayBuffer.empty[Double]
+    var losses = List.empty[Double]
     for (run <- 1 to args.runs()) {
       log.info(s"Run $run")
       val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
@@ -72,11 +72,12 @@ object MovieLensBaselineALS {
         .setLabelCol("rating")
         .setPredictionCol("prediction")
       val mse = evaluator.evaluate(predictions)
-      losses += mse
+      losses = losses :+ mse
     }
     log.info("Writing losses to baseline_losses.txt")
     val filePath = "baseline_losses.txt"
-    val losses_rdd = spark.sparkContext.parallelize(losses)
-    losses_rdd.coalesce(1).saveAsTextFile(filePath)
+    val writer = new BufferedWriter(new FileWriter(filePath))
+    losses.foreach(l => writer.write(l + "\n"))
+    writer.close()
   }
 }
