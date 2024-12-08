@@ -76,8 +76,7 @@ object MovieLensBaselineALS {
     }
     log.info("Writing losses to baseline_losses.txt")
     val filePath = "baseline_losses.txt"
-    val fileWriter = new BufferedWriter(new FileWriter(filePath))
-    fileWriter.write(losses.mkString("\n"))
-    fileWriter.close()
+    val losses_rdd = spark.sparkContext.parallelize(losses)
+    losses_rdd.coalesce(1).saveAsTextFile(filePath)
   }
 }
