@@ -1,13 +1,11 @@
 package ca.uwaterloo.cs651project
 
 import org.apache.log4j._
+import org.apache.spark.ml.evaluation.RegressionEvaluator
+import org.apache.spark.ml.recommendation.ALS
 import org.apache.spark.sql.SparkSession
 import org.rogach.scallop._
-import org.apache.spark.ml.recommendation.ALS
-import org.apache.spark.ml.evaluation.RegressionEvaluator
-import scala.collection.mutable.ArrayBuffer
 
-import java.io.{BufferedWriter, FileWriter}
 import java.nio.file.Paths
 import scala.sys.process._
 
@@ -72,12 +70,7 @@ object MovieLensBaselineALS {
         .setLabelCol("rating")
         .setPredictionCol("prediction")
       val mse = evaluator.evaluate(predictions)
-      losses = losses :+ mse
+      println(s"Run $run MSE = $mse")
     }
-    log.info("Writing losses to baseline_losses.txt")
-    val filePath = "baseline_losses.txt"
-    val writer = new BufferedWriter(new FileWriter(filePath))
-    writer.write(losses.mkString("\n"))
-    writer.close()
   }
 }
