@@ -41,7 +41,6 @@ object MovieLensBaselineALS {
     val ratings = df.select("userId", "movieId", "rating").cache()
     val ratio = if (args.size() == "small") 0.8 else 0.9
     val rank = if (args.size() == "small") 6 else 10
-    val losses = spark.sparkContext.collectionAccumulator[Double]("Losses")
 
     val ALS = new ALS()
       .setRank(rank)
@@ -51,24 +50,25 @@ object MovieLensBaselineALS {
       .setItemCol("movieId")
       .setRatingCol("rating")
       .setColdStartStrategy("drop")
-    val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
+
     val evaluator = new RegressionEvaluator()
       .setMetricName("mse")
       .setLabelCol("rating")
       .setPredictionCol("prediction")
 
+    var losses = List[Double]()
     for (run <- 1 to args.runs()) {
       log.info(s"ALS Run $run")
+      val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
       val model = ALS.fit(training)
       val predictions = model.transform(test)
       val mse = evaluator.evaluate(predictions)
-      losses.add(mse)
+      losses = losses :+ mse
     }
-    val loss_list = losses.value.toArray
     log.info("Writing losses to baseline_losses.txt")
     val filePath = "baseline_losses.txt"
     val fileWriter = new BufferedWriter(new FileWriter(filePath))
-    fileWriter.write(loss_list.mkString("\n"))
+    fileWriter.write(losses.mkString("\n"))
     fileWriter.close()
   }
 }
