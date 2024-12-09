@@ -30,6 +30,7 @@ object MovieLensBaselineALS {
   def main(argv: Array[String]): Unit = {
     val args = new ConfBaseline(argv)
     val spark = SparkSession.builder()
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .appName("MovieLensBaselineALS")
       .getOrCreate()
 
