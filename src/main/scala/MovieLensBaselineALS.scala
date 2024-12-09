@@ -49,18 +49,18 @@ object MovieLensBaselineALS {
     } else {
       10
     }
+    val ALS = new ALS()
+      .setRank(rank)
+      .setMaxIter(25)
+      .setRegParam(0.1)
+      .setUserCol("userId")
+      .setItemCol("movieId")
+      .setRatingCol("rating")
+      .setColdStartStrategy("drop")
+
     for (run <- 1 to args.runs()) {
       log.info(s"Run $run")
       val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
-
-      val ALS = new ALS()
-        .setRank(rank)
-        .setMaxIter(25)
-        .setRegParam(0.1)
-        .setUserCol("userId")
-        .setItemCol("movieId")
-        .setRatingCol("rating")
-        .setColdStartStrategy("drop")
 
       val model = ALS.fit(training)
       val predictions = model.transform(test)
