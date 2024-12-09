@@ -14,14 +14,14 @@ import scala.collection.mutable
 import scala.sys.process._
 import scala.util.Random
 
-class Conf(args: Seq[String]) extends ScallopConf(args) {
+class ConfRejectionSamplingPlotsData(args: Seq[String]) extends ScallopConf(args) {
   mainOptions = Seq(size)
   val size = opt[String](descr = "MoviLens dataset (small/large)", required = false, default = Some("small"))
   verify()
 }
 
 
-object MovieLens {
+object RejectionSamplingPlotsData {
   val log = Logger.getLogger(getClass.getName)
   val RATING_THRESHOLD = 120
   val MAX_ITER = 100000
@@ -36,6 +36,12 @@ object MovieLens {
   private def stddev(seq: Seq[Double]): Double = {
     val mean = seq.sum / seq.length
     math.sqrt(seq.map(x => math.pow(x - mean, 2)).sum / seq.length)
+  }
+
+  private def dist_stddev(p: Seq[Double]): Double = {
+    val mean = p.zipWithIndex.map { case (prob, i) => prob * (i + 1) }.sum
+    val var_ = p.zipWithIndex.map { case (prob, i) => prob * math.pow((i + 1) - mean, 2) }.sum
+    math.sqrt(var_)
   }
 
   private def rejection_sampling(stats: Seq[Int], priors: Array[Seq[Double]], max_iter: Int, tol: Double = 0.1): Seq[Seq[Double]] = {
@@ -75,9 +81,9 @@ object MovieLens {
   }
 
   def main(argv: Array[String]): Unit = {
-    val args = new Conf(argv)
+    val args = new ConfRejectionSamplingPlotsData(argv)
     val spark = SparkSession.builder()
-      .appName("MovieLensRejectionSampling")
+      .appName("RejectionSamplingPlotsData")
       .getOrCreate()
 
     log.info(s"Getting data (${args.size} - this may take a while")
@@ -126,9 +132,13 @@ object MovieLens {
     val n_x_pairs = for (n <- ns; x <- tests) yield (n, x)
     val n_x_rdd = spark.sparkContext.parallelize(n_x_pairs)
 
-    def process_n_x_pair(n_x_pair: (Int, Seq[Double])): (Int, Double, Double) = {
+    def process_n_x_pair(n_x_pair: (Int, Seq[Double])): (Int, Double, Double, Double, Double) = {
       val (n, x) = n_x_pair
-      val val_ = x.zip(1 to 5).map { case (x_i, r_i) => x_i * r_i }.sum
+      // True mean and stddev of the distribution x
+      val true_mean = x.zip(1 to 5).map { case (x_i, r_i) => x_i * r_i }.sum
+      val true_std = dist_stddev(x)
+
+      // Sample from the multinomial distribution
       val mult = Multinomial(DenseVector(x.toArray))
       val draw = mult.sample(n).toArray[Int]
       val sample = Array.fill(5)(0)
@@ -136,51 +146,99 @@ object MovieLens {
         sample(i) += 1
       }
       val sample_mean = sample.zip(1 to 5).map { case (s_i, r_i) => s_i * r_i }.sum / n.toDouble
-      val errors_1 = sample_mean - val_
+      val sample_std = dist_stddev(sample.map(_.toDouble / n.toDouble))
+
+      // Errors for sample mean estimation
+      val mean_err_1 = sample_mean - true_mean
+      val std_err_1 = sample_std - true_std
+
+      // Rejection sampling
       val priors = priors_bc.value
       val max_iter = max_iter_bc.value
       val posteriors = rejection_sampling(sample, priors, max_iter)
       val posterior_means = posteriors.map(p => p.zip(1 to 5).map { case (p_i, r_i) => p_i * r_i }.sum)
-      val errors_2 = posterior_means.sum / posterior_means.length - val_
-      (n, errors_1, errors_2)
+      val posterior_mean = posterior_means.sum / posterior_means.length
+      val mean_err_2 = posterior_mean - true_mean
+
+      val posterior_stds = posteriors.map(dist_stddev)
+      val posterior_std_mean = posterior_stds.sum / posterior_stds.length
+      val std_err_2 = posterior_std_mean - true_std
+
+      (n, mean_err_1, mean_err_2, std_err_1, std_err_2)
     }
 
     val results = n_x_rdd.map(process_n_x_pair).collect()
 
-    val errors_1_dict = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
-    val errors_2_dict = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
+    // Errors 1 => Sample Mean Estimation
+    // Errors 2 => Rejection Sampling Estimation
+    val mean_errors_1_dsct = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
+    val mean_errors_2_dict = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
+    val std_errors_1_dict = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
+    val std_errors_2_dict = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
 
-    for ((n, e1, e2) <- results) {
-      errors_1_dict(n) = errors_1_dict(n) :+ e1
-      errors_2_dict(n) = errors_2_dict(n) :+ e2
+    for ((n, me1, me2, se1, se2) <- results) {
+      mean_errors_1_dsct(n) = mean_errors_1_dsct(n) :+ me1
+      mean_errors_2_dict(n) = mean_errors_2_dict(n) :+ me2
+      std_errors_1_dict(n) = std_errors_1_dict(n) :+ se1
+      std_errors_2_dict(n) = std_errors_2_dict(n) :+ se2
     }
 
-    val s_1 = ns.map { n =>
-      val errors_1 = errors_1_dict.getOrElse(n, Seq.empty[Double])
-      val mse_1 = errors_1.map(e => e * e).sum / errors_1.length
-      (n, mse_1)
+    val s_1_mean = ns.map { n =>
+      val mean_errors_1 = mean_errors_1_dsct.getOrElse(n, Seq.empty[Double])
+      val mse_1_mean = mean_errors_1.map(e => e * e).sum / mean_errors_1.length
+      (n, mse_1_mean)
     }
 
-    val s_2 = ns.map { n =>
-      val errors_2 = errors_2_dict.getOrElse(n, Seq.empty[Double])
-      val mse_2 = errors_2.map(e => e * e).sum / errors_2.length
-      (n, mse_2)
+    val s_2_mean = ns.map { n =>
+      val mean_errors_2 = mean_errors_2_dict.getOrElse(n, Seq.empty[Double])
+      val mse_2_mean = mean_errors_2.map(e => e * e).sum / mean_errors_2.length
+      (n, mse_2_mean)
     }
 
-    var filePath = "sample_mean_mse.txt"
+    val s_1_std = ns.map { n =>
+      val std_errors_1 = std_errors_1_dict.getOrElse(n, Seq.empty[Double])
+      val mse_1_std = std_errors_1.map(e => e * e).sum / std_errors_1.length
+      (n, mse_1_std)
+    }
+
+    val s_2_std = ns.map { n =>
+      val std_errors_2 = std_errors_2_dict.getOrElse(n, Seq.empty[Double])
+      val mse_2_std = std_errors_2.map(e => e * e).sum / std_errors_2.length
+      (n, mse_2_std)
+    }
+
+    var filePath = "sample_mean_mse_mean.txt"
     var fileWriter = new BufferedWriter(new FileWriter(filePath))
-    log.info("Writing Mean Squared Errors using Sample Mean Estimation")
-    s_1.foreach { case (n, mse) =>
+    log.info("Writing Mean Squared Errors for mean using Sample Mean Estimation")
+    s_1_mean.foreach { case (n, mse) =>
       fileWriter.write(s"$n\t$mse\n")
     }
     fileWriter.close()
 
-    filePath = "rejection_sampling_mse.txt"
+    filePath = "rejection_sampling_mse_mean.txt"
     fileWriter = new BufferedWriter(new FileWriter(filePath))
-    log.info("Writing Mean Squared Errors using Rejection Sampling Estimation")
-    s_2.foreach { case (n, mse) =>
+    log.info("Writing Mean Squared Errors for mean using Rejection Sampling Estimation")
+    s_2_mean.foreach { case (n, mse) =>
       fileWriter.write(s"$n\t$mse\n")
     }
     fileWriter.close()
+
+    filePath = "sample_mean_mse_std.txt"
+    fileWriter = new BufferedWriter(new FileWriter(filePath))
+    log.info("Writing Mean Squared Errors for std using Sample Mean Estimation")
+    s_1_std.foreach { case (n, mse) =>
+      fileWriter.write(s"$n\t$mse\n")
+    }
+    fileWriter.close()
+
+    filePath = "rejection_sampling_mse_std.txt"
+    fileWriter = new BufferedWriter(new FileWriter(filePath))
+    log.info("Writing Mean Squared Errors for std using Rejection Sampling Estimation")
+    s_2_std.foreach { case (n, mse) =>
+      fileWriter.write(s"$n\t$mse\n")
+    }
+    fileWriter.close()
+
+    spark.stop()
   }
 }
