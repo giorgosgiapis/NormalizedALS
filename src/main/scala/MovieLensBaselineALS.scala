@@ -51,17 +51,16 @@ object MovieLensBaselineALS {
       .setItemCol("movieId")
       .setRatingCol("rating")
       .setColdStartStrategy("drop")
+    val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
+    val evaluator = new RegressionEvaluator()
+      .setMetricName("mse")
+      .setLabelCol("rating")
+      .setPredictionCol("prediction")
 
     for (run <- 1 to args.runs()) {
       log.info(s"ALS Run $run")
-      val Array(training, test) = ratings.randomSplit(Array(ratio, 1 - ratio))
       val model = ALS.fit(training)
       val predictions = model.transform(test)
-
-      val evaluator = new RegressionEvaluator()
-        .setMetricName("mse")
-        .setLabelCol("rating")
-        .setPredictionCol("prediction")
       val mse = evaluator.evaluate(predictions)
       losses.add(mse)
     }
