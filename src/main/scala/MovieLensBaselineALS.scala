@@ -1,6 +1,5 @@
 package ca.uwaterloo.cs651project
 
-import ca.uwaterloo.cs651project.MovieLensZScoreALS.log
 import org.apache.log4j._
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.recommendation.ALS
@@ -67,8 +66,8 @@ object MovieLensBaselineALS {
       losses.add(mse)
     }
     val loss_list = losses.value.toArray
-    log.info("Writing losses to normalized_losses.txt")
-    val filePath = "normalized_losses.txt"
+    log.info("Writing losses to baseline_losses.txt")
+    val filePath = "baseline_losses.txt"
     val fileWriter = new BufferedWriter(new FileWriter(filePath))
     fileWriter.write(loss_list.mkString("\n"))
     fileWriter.close()
