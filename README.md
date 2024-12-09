@@ -1,29 +1,50 @@
-## Personalized PageRank with ALS
+## ALS with Rating Normalization
 
-Test
+This repository contains the Scala code for the final project of the course **CS651: Data-Intensive Distributed Computing** 
+at the University of Waterloo, for the Fall 2024 term. You can find the report for this project [here]().
+
 
 ### Requirements:
 The Java, Scala and Spark versions used here are the same as the ones 
-used in the course 'CS651: Data-Intensive Distributed Computing'. Namely:
+used in the course throughout the Fall 2024 term. Namely:
 - Java: 1.8.0
 - Scala: 2.11.8
 - Spark: 2.3.1
+- Maven (any reasonably recent version should work)
 
-To build the project, `sbt` is required. The version used here is 1.10.1 
-but any reasonably recent version should work.
+To compile the project, first run `mvn clean package`.
 
 ### How to run:
-To build the project, first do:
+To run the code used to generate the data to evaluate the rejection sampling method 
+run:
 ```
-sbt update
+ spark-submit --class ca.uwaterloo.cs651project.RejectionSamplingPlotsData target/project-1.0.jar --size [small/large]
 ```
-To install spark. Then run:
+where the `--size` indicates the version of the dataset used (`small` or `large`). This argument is optional. If not provided, 
+the small dataset will be used.
+This code will generate 4 text files, containing the test MSE for the mean and standard deviation across various number of 
+samples (the data for Fig. 2 of the report).
+
+To the Baseline ALS model run:
 ```
-sbt clean assembly
+spark-submit --class ca.uwaterloo.cs651project.MovieLensBaselineALS target/project-1.0.jar --size [small/large] --runs [no_of_runs]
 ```
-To run it, use:
+where the `--size` is as before  (defaults to `small`). The `--runs` argument is optional and indicates the number of runs.
+If not provided, it defaults to 1. The test MSE for each run of the baseline algorithm will be written to the text file `baseline_losses.txt`.
+
+To run the ALS model with rating normalization (our method) run:
 ```
- spark-submit --class ca.uwaterloo.cs651project.MovieLens target/scala-2.11/PersonalizedPagerankALS-assembly-0.1.0.jar --size [small/large] 
+spark-submit --class ca.uwaterloo.cs651project.MovieLensZScoreALS target/project-1.0.jar --size [small/large] --runs [no_of_runs]
 ```
-The `--size` argument is optional. If not provided, the small dataset will be used.
-To run it locally, you can instead use the simpler command `sbt run` (it will automatically use the small dataset).
+where the `--size` and `--runs` arguments are as before. The test MSE for each run of the ALS algorithm with rating normalization 
+will be written to the text file `normalization_losses.txt`.
+
+### Additional notes:
+- There is no need to download the dataset. When specifying the `--size` argument, the code will automatically download the 
+appropriate dataset and move it to HDFS (if it is not already there). This is taken care of by the scripts 
+`download_data.sh` and `move_data_to_hdfs.sh`.
+- You may need to increase your stack size to avoid a `StackOverflowError`. To do this, run
+`ulimit -s unlimited`
+in the terminal before running the code.
+
+
