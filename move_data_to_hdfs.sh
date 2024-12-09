@@ -10,4 +10,5 @@ fi
 if [ ! -d "data_""$1" ]; then
   ./download_data.sh "$1"
 fi
+hdfs dfs -mkdir data_"$1"
 hdfs dfs -put data_"$1"/* data_"$1"/
