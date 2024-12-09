@@ -11,8 +11,9 @@ import java.nio.file.Paths
 import scala.sys.process._
 
 class ConfBaseline(args: Seq[String]) extends ScallopConf(args) {
-  mainOptions = Seq(size, runs)
+  mainOptions = Seq(size, rank, runs)
   val size = opt[String](descr = "MoviLens dataset (small/large)", required = false, default = Some("small"))
+  val rank = opt[Int](descr = "ALS rank", required = false, default = Some(6))
   val runs = opt[Int](descr = "Number of runs", required = false, default = Some(1))
   verify()
 }
@@ -40,7 +41,7 @@ object MovieLensBaselineALS {
     val df = spark.read.option("header", "true").option("inferSchema", "true").csv(dataPath)
     val ratings = df.select("userId", "movieId", "rating").cache()
     val ratio = if (args.size() == "small") 0.8 else 0.9
-    val rank = if (args.size() == "small") 6 else 10
+    val rank = args.rank()
 
     val ALS = new ALS()
       .setRank(rank)
@@ -65,8 +66,8 @@ object MovieLensBaselineALS {
       val mse = evaluator.evaluate(predictions)
       losses = losses :+ mse
     }
-    log.info("Writing losses to baseline_losses.txt")
-    val filePath = "baseline_losses.txt"
+    log.info(s"Writing losses to baseline_losses_rank$rank.txt")
+    val filePath = s"baseline_losses_rank$rank.txt"
     val fileWriter = new BufferedWriter(new FileWriter(filePath))
     fileWriter.write(losses.mkString("\n"))
     fileWriter.close()

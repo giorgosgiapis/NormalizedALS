@@ -14,8 +14,9 @@ import scala.sys.process._
 import scala.util.Random
 
 class ConfMovieLensZScoreALS(args: Seq[String]) extends ScallopConf(args) {
-  mainOptions = Seq(size, runs)
+  mainOptions = Seq(size, rank, runs)
   val size = opt[String](descr = "MoviLens dataset (small/large)", required = false, default = Some("small"))
+  val rank = opt[Int](descr = "ALS rank", required = false, default = Some(6))
   val runs = opt[Int](descr = "Number of runs for ALS", required = false, default = Some(1))
   verify()
 }
@@ -174,12 +175,12 @@ object MovieLensZScoreALS {
       .cache()
 
     val ratio = if (args.size() == "small") 0.8 else 0.9
-    val rank = if (args.size() == "small") 6 else 10
+    val rank = args.rank()
 
     val als = new ALS()
       .setRank(rank)
       .setMaxIter(25)
-      .setRegParam(0.15)
+      .setRegParam(0.2)
       .setUserCol("userId")
       .setItemCol("movieId")
       .setRatingCol("normalized_rating")
@@ -196,16 +197,14 @@ object MovieLensZScoreALS {
       val Array(training, testing) = normalized_df.randomSplit(Array(ratio, 1 - ratio))
       val model = als.fit(training)
       val predictions = model.transform(testing)
-      predictions.show()
       val raw_predictions = predictions
         .withColumn("raw_predictions", inverse_transform_udf($"prediction", $"mean", $"std"))
-      raw_predictions.show()
       val mse = evaluator.evaluate(raw_predictions)
       losses = losses :+ mse
     }
 
-    log.info("Writing losses to normalized_losses.txt")
-    val filePath = "normalized_losses.txt"
+    log.info(s"Writing losses to normalized_losses_rank$rank.txt")
+    val filePath = s"normalized_losses_rank$rank.txt"
     val fileWriter = new BufferedWriter(new FileWriter(filePath))
     fileWriter.write(losses.mkString("\n"))
     fileWriter.close()

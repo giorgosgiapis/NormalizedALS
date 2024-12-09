@@ -134,11 +134,9 @@ object RejectionSamplingPlotsData {
 
     def process_n_x_pair(n_x_pair: (Int, Seq[Double])): (Int, Double, Double, Double, Double) = {
       val (n, x) = n_x_pair
-      // True mean and stddev of the distribution x
       val true_mean = x.zip(1 to 5).map { case (x_i, r_i) => x_i * r_i }.sum
       val true_std = dist_stddev(x)
 
-      // Sample from the multinomial distribution
       val mult = Multinomial(DenseVector(x.toArray))
       val draw = mult.sample(n).toArray[Int]
       val sample = Array.fill(5)(0)
@@ -148,7 +146,6 @@ object RejectionSamplingPlotsData {
       val sample_mean = sample.zip(1 to 5).map { case (s_i, r_i) => s_i * r_i }.sum / n.toDouble
       val sample_std = dist_stddev(sample.map(_.toDouble / n.toDouble))
 
-      // Errors for sample mean estimation
       val mean_err_1 = sample_mean - true_mean
       val std_err_1 = sample_std - true_std
 

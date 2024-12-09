@@ -27,17 +27,18 @@ samples (the data for Fig. 2 of the report).
 
 To the Baseline ALS model run:
 ```
-spark-submit --class ca.uwaterloo.cs651project.MovieLensBaselineALS target/project-1.0.jar --size [small/large] --runs [no_of_runs]
+spark-submit --class ca.uwaterloo.cs651project.MovieLensBaselineALS target/project-1.0.jar --size [small/large] --rank [factors_rank] --runs [no_of_runs]
 ```
-where the `--size` is as before  (defaults to `small`). The `--runs` argument is optional and indicates the number of runs.
-If not provided, it defaults to 1. The test MSE for each run of the baseline algorithm will be written to the text file `baseline_losses.txt`.
+where the `--size` is as before  (defaults to `small`). The `--rank` arguments dictates the rank of the factor matrices (defaults to 6).
+The `--runs` argument is optional and indicates the number of runs. If not provided, it defaults to 1. The test MSE for 
+each run of the baseline algorithm will be written to the text file `baseline_losses_rank[factors_rank].txt`.
 
 To run the ALS model with rating normalization (our method) run:
 ```
 spark-submit --class ca.uwaterloo.cs651project.MovieLensZScoreALS target/project-1.0.jar --size [small/large] --runs [no_of_runs]
 ```
-where the `--size` and `--runs` arguments are as before. The test MSE for each run of the ALS algorithm with rating normalization 
-will be written to the text file `normalization_losses.txt`.
+where the `--size`, `--rank` and `--runs` arguments are as before. The test MSE for each run of the ALS algorithm with rating normalization 
+will be written to the text file `normalization_losses_rank[factors_rank].txt`.
 
 ### Additional notes:
 - There is no need to download the dataset. When specifying the `--size` argument, the code will automatically download the 
