@@ -46,7 +46,8 @@ will be written to the text file `normalization_losses_rank[factors_rank].txt`.
 appropriate dataset and move it to HDFS (if it is not already there). This is taken care of by the scripts 
 `download_data.sh` and `move_data_to_hdfs.sh`.
 - You may need to increase your stack size to avoid a `StackOverflowError`. To do this locally, run
-`ulimit -s unlimited`. When running on the cluster, add `--conf "spark.executor.extraJavaOptions=-Xss10000000m"` argument in the `spark-submit` command
-to ensure that the stack size of the worker nodes is big enough for the code to run without causing a `StackOverflowError`.
+`ulimit -s unlimited`. When running on the cluster, add `--conf "spark.executor.extraJavaOptions=-Xss10000000m"` argument 
+in the `spark-submit` command (**before** `target/project-1.0.jar`). This ensures that the stack size of the worker nodes 
+is big enough for the code to run without causing a `StackOverflowError`.
 
 
