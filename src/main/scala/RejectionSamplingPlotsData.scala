@@ -44,7 +44,7 @@ object RejectionSamplingPlotsData {
     math.sqrt(var_)
   }
 
-  private def rejection_sampling(stats: Seq[Int], priors: Array[Seq[Double]], max_iter: Int, tol: Double = 0.1): Seq[Seq[Double]] = {
+  private def rejection_sampling(stats: Seq[Int], priors: Array[Seq[Double]], max_iter: Int, tol: Double = 0.1): (Seq[Seq[Double]], Int) = {
     var dists = Seq.empty[Seq[Double]]
     val sum_stats = stats.sum.toDouble
     val stats_length = stats.length
@@ -73,11 +73,11 @@ object RejectionSamplingPlotsData {
         }
         if (samples >= 100 && cur_var.forall(_ < tol * samples)) {
           log.info(s"Converged after $iter iterations")
-          return dists
+          return (dists, iter)
         }
       }
     }
-    dists
+    (dists, max_iter)
   }
 
   def main(argv: Array[String]): Unit = {
@@ -132,7 +132,7 @@ object RejectionSamplingPlotsData {
     val n_x_pairs = for (n <- ns; x <- tests) yield (n, x)
     val n_x_rdd = spark.sparkContext.parallelize(n_x_pairs)
 
-    def process_n_x_pair(n_x_pair: (Int, Seq[Double])): (Int, Double, Double, Double, Double) = {
+    def process_n_x_pair(n_x_pair: (Int, Seq[Double])): (Int, Double, Double, Double, Double, Int) = {
       val (n, x) = n_x_pair
       val true_mean = x.zip(1 to 5).map { case (x_i, r_i) => x_i * r_i }.sum
       val true_std = dist_stddev(x)
@@ -152,7 +152,7 @@ object RejectionSamplingPlotsData {
       // Rejection sampling
       val priors = priors_bc.value
       val max_iter = max_iter_bc.value
-      val posteriors = rejection_sampling(sample, priors, max_iter)
+      val (posteriors, iterations) = rejection_sampling(sample, priors, max_iter)
       val posterior_means = posteriors.map(p => p.zip(1 to 5).map { case (p_i, r_i) => p_i * r_i }.sum)
       val posterior_mean = posterior_means.sum / posterior_means.length
       val mean_err_2 = posterior_mean - true_mean
@@ -161,7 +161,7 @@ object RejectionSamplingPlotsData {
       val posterior_std_mean = posterior_stds.sum / posterior_stds.length
       val std_err_2 = posterior_std_mean - true_std
 
-      (n, mean_err_1, mean_err_2, std_err_1, std_err_2)
+      (n, mean_err_1, mean_err_2, std_err_1, std_err_2, iterations)
     }
 
     val results = n_x_rdd.map(process_n_x_pair).collect()
@@ -172,12 +172,14 @@ object RejectionSamplingPlotsData {
     val mean_errors_2_dict = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
     val std_errors_1_dict = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
     val std_errors_2_dict = mutable.Map[Int, Seq[Double]]().withDefaultValue(Seq.empty)
+    val iterations_dict = mutable.Map[Int, Seq[Int]]().withDefaultValue(Seq.empty)
 
-    for ((n, me1, me2, se1, se2) <- results) {
+    for ((n, me1, me2, se1, se2, it) <- results) {
       mean_errors_1_dsct(n) = mean_errors_1_dsct(n) :+ me1
       mean_errors_2_dict(n) = mean_errors_2_dict(n) :+ me2
       std_errors_1_dict(n) = std_errors_1_dict(n) :+ se1
       std_errors_2_dict(n) = std_errors_2_dict(n) :+ se2
+      iterations_dict(n) = iterations_dict(n) :+ it
     }
 
     val s_1_mean = ns.map { n =>
@@ -202,6 +204,12 @@ object RejectionSamplingPlotsData {
       val std_errors_2 = std_errors_2_dict.getOrElse(n, Seq.empty[Double])
       val mse_2_std = std_errors_2.map(e => e * e).sum / std_errors_2.length
       (n, mse_2_std)
+    }
+
+    val avg_iterations = ns.map { n =>
+      val iterations = iterations_dict.getOrElse(n, Seq.empty[Int])
+      val avg_iterations = iterations.sum.toDouble / iterations.length
+      (n, avg_iterations)
     }
 
     var filePath = "sample_mean_mse_mean.txt"
@@ -233,6 +241,14 @@ object RejectionSamplingPlotsData {
     log.info("Writing Mean Squared Errors for std using Rejection Sampling Estimation")
     s_2_std.foreach { case (n, mse) =>
       fileWriter.write(s"$n\t$mse\n")
+    }
+    fileWriter.close()
+
+    filePath = "avg_iterations.txt"
+    fileWriter = new BufferedWriter(new FileWriter(filePath))
+    log.info("Writing number of average iterations in Rejection Sampling")
+    avg_iterations.foreach { case (n, its) =>
+      fileWriter.write(s"$n\t${its.round.toInt}\n")
     }
     fileWriter.close()
 

@@ -22,8 +22,9 @@ run:
 ```
 where the `--size` indicates the version of the dataset used (`small` or `large`). This argument is optional. If not provided, 
 the small dataset will be used.
-This code will generate 4 text files, containing the test MSE for the mean and standard deviation across various number of 
-samples (the data for Fig. 2 of the report).
+This code will generate 5 text files, four of them containing the test MSE for the mean and standard deviation across various number of 
+samples (the data for Fig. 2 in the report) and the last one containing the average number of generated samples in the rejection sampling 
+across various numbers of samples (the data for Fig. 3 in the report).
 
 To the Baseline ALS model run:
 ```
@@ -44,8 +45,8 @@ will be written to the text file `normalization_losses_rank[factors_rank].txt`.
 - There is no need to download the dataset. When specifying the `--size` argument, the code will automatically download the 
 appropriate dataset and move it to HDFS (if it is not already there). This is taken care of by the scripts 
 `download_data.sh` and `move_data_to_hdfs.sh`.
-- You may need to increase your stack size to avoid a `StackOverflowError`. To do this, run
-`ulimit -s unlimited`
-in the terminal before running the code.
+- You may need to increase your stack size to avoid a `StackOverflowError`. To do this locally, run
+`ulimit -s unlimited`. When running on the cluster, add `--conf "spark.executor.extraJavaOptions=-Xss10000000m"` argument in the `spark-submit` command
+to ensure that the stack size of the worker nodes is big enough for the code to run without causing a `StackOverflowError`.
 
 
