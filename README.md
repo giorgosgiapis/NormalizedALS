@@ -1,6 +1,6 @@
 ## ALS with Rating Normalization
 This repository contains the Scala code for the final project of the course **CS651: Data-Intensive Distributed Computing** 
-at the University of Waterloo, for the Fall 2024 term. You can find the report for this project [here]().
+at the University of Waterloo, for the Fall 2024 term. You can find the report for this project [here](https://github.com/giorgosgiapis/NormalizedALS/blob/main/report.pdf).
 
 
 ### Requirements:
