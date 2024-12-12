@@ -1,5 +1,4 @@
 ## ALS with Rating Normalization
-a
 This repository contains the Scala code for the final project of the course **CS651: Data-Intensive Distributed Computing** 
 at the University of Waterloo, for the Fall 2024 term. You can find the report for this project [here]().
 
@@ -39,7 +38,7 @@ To run the ALS model with rating normalization (our method) run:
 spark-submit --class ca.uwaterloo.cs651project.MovieLensZScoreALS target/project-1.0.jar --size [small/large] --runs [no_of_runs] --modeldir [modeldir]
 ```
 where the `--size`, `--rank` and `--runs` arguments are as before. The test MSE for each run of the ALS algorithm with rating normalization 
-will be written to the text file `normalization_losses_rank[factors_rank].txt`. This command also takes in a --modeldir option, which will store the movie feature vectors in modeldir/movievectors.obj, 
+will be written to the text file `normalization_losses_rank[factors_rank].txt`. This command also takes in a `--modeldir` option, which will store the movie feature vectors in `modeldir/movievectors.obj`, 
 if supplied. 
 
 To collect the movie vectors corresponding to the N most prolific users, run:
@@ -58,7 +57,7 @@ Finally, to run inference, run:
 ```
 spark-submit --class ca.uwaterloo.cs651project.RunInference target/project-1.0.jar --size [small/large] --userids [userids] --modeldir [modeldir] --bval [B] --number [number]
 ```
-userids must be a string of userids separated by commas. number is the number of recommendations for every user, which will be printed to disk. B is the weight to be accorded to the 
+`userids` must be a string of UserIDs separated by commas. `number` signifies the number of recommendations for every user, which will be printed to disk. `B` is the weight to be accorded to the 
 information content.
 
 
