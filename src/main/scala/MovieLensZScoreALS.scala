@@ -7,17 +7,21 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.rogach.scallop._
+import org.apache.spark.mllib.linalg.{Vector, Vectors}
 
 import java.io.{BufferedWriter, FileWriter}
 import java.nio.file.Paths
 import scala.sys.process._
 import scala.util.Random
+import scala.collection.mutable.WrappedArray
+import org.apache.spark.ml.linalg.DenseVector
 
 class ConfMovieLensZScoreALS(args: Seq[String]) extends ScallopConf(args) {
   mainOptions = Seq(size, rank, runs)
   val size = opt[String](descr = "MoviLens dataset (small/large)", required = false, default = Some("small"))
   val rank = opt[Int](descr = "ALS rank", required = false, default = Some(6))
   val runs = opt[Int](descr = "Number of runs for ALS", required = false, default = Some(1))
+  val modeldir = opt[String](descr = "Output directory for the model", required = false, default = Some(""))
   verify()
 }
 
@@ -83,6 +87,8 @@ object MovieLensZScoreALS {
     val runs = args.runs()
     log.info(s"Getting data (${args.size()} - this may take a while")
     val dataPath = getData(args.size())
+	spark.conf.set("spark.driver.memory", "4g")
+spark.conf.set("spark.executor.memory", "4g")
 
     import spark.implicits._
 
@@ -196,6 +202,10 @@ object MovieLensZScoreALS {
       log.info(s"ALS Run $run")
       val Array(training, testing) = normalized_df.randomSplit(Array(ratio, 1 - ratio))
       val model = als.fit(training)
+	  if(run == runs && !(args.modeldir().isEmpty))
+		model.itemFactors.map(row => (row.getAs[Int]("id"), new DenseVector(row.getAs[WrappedArray[Float]]("features").toArray.map(_.toDouble)))).rdd.saveAsObjectFile(args.modeldir() + "/moviefactors.obj")
+	  
+	  
       val predictions = model.transform(testing)
       val raw_predictions = predictions
         .withColumn("raw_predictions", inverse_transform_udf($"prediction", $"mean", $"std"))

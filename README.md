@@ -36,17 +36,38 @@ each run of the baseline algorithm will be written to the text file `baseline_lo
 
 To run the ALS model with rating normalization (our method) run:
 ```
-spark-submit --class ca.uwaterloo.cs651project.MovieLensZScoreALS target/project-1.0.jar --size [small/large] --runs [no_of_runs]
+spark-submit --class ca.uwaterloo.cs651project.MovieLensZScoreALS target/project-1.0.jar --size [small/large] --runs [no_of_runs] --modeldir [modeldir]
 ```
 where the `--size`, `--rank` and `--runs` arguments are as before. The test MSE for each run of the ALS algorithm with rating normalization 
-will be written to the text file `normalization_losses_rank[factors_rank].txt`.
+will be written to the text file `normalization_losses_rank[factors_rank].txt`. This command also takes in a --modeldir option, which will store the movie feature vectors in modeldir/movievectors.obj, 
+if supplied. 
+
+To collect the movie vectors corresponding to the N most prolific users, run:
+```
+spark-submit --class ca.uwaterloo.cs651project.CollectTopUserVectors target/project-1.0.jar --size [small/large] --numberofusers [numberofusers] --modeldir [modeldir] --outputfile [outputfile]
+```
+The format of the outputfile is: a triple star signals the beginning of a collection of vectors. Each vector is printed on a separate line with spaces between every component.
+
+To fit a kernel from the user vectors thereby obtained, run:
+```
+julia fitkernel.jl [inputfile] [outputdir] [initial_cutoff (optional)] [cutoff_step (optional)]
+```
+The inputfile is supposed to be the output of the previous command. The outputdir is where the plots corresponding to the kernels are stored.
+
+Finally, to run inference, run:
+```
+spark-submit --class ca.uwaterloo.cs651project.RunInference target/project-1.0.jar --size [small/large] --userids [userids] --modeldir [modeldir] --bval [B] --number [number]
+```
+userids must be a string of userids separated by commas. number is the number of recommendations for every user, which will be printed to disk. B is the weight to be accorded to the 
+information content.
+
 
 ### Additional notes:
 - There is no need to download the dataset. When specifying the `--size` argument, the code will automatically download the 
 appropriate dataset and move it to HDFS (if it is not already there). This is taken care of by the scripts 
 `download_data.sh` and `move_data_to_hdfs.sh`.
 - You may need to increase your stack size to avoid a `StackOverflowError`. To do this locally, run
-`ulimit -s unlimited`. When running on the cluster, add `--conf "spark.executor.extraJavaOptions=-Xss10000000m"` argument 
+`ulimit -s unlimited`. Note that common users do not have the permissions to do this on student, but it is possible on datasci. When running on the cluster, add `--conf "spark.executor.extraJavaOptions=-Xss10000000m"` argument 
 in the `spark-submit` command (**before** `target/project-1.0.jar`). This ensures that the stack size of the worker nodes 
 is big enough for the code to run without causing a `StackOverflowError`.
 
