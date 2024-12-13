@@ -11,6 +11,8 @@ import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.sql.functions.udf
 import org.apache.spark._
 import org.apache.spark.ml.linalg.DenseVector
+import scala.collection.mutable.WrappedArray
+
 
 import java.io.{BufferedWriter, FileWriter}
 import java.nio.file.Paths
@@ -66,11 +68,11 @@ import spark.implicits._
 	val broadcastTopUsers = spark.sparkContext.broadcast(topUsers)
 	val is_top_user = udf((value: Int) => broadcastTopUsers.value.contains(value))
 	val filtered_df = df.filter(is_top_user($"userId"))
-		
+	
 	val movie_vectors = spark.read.parquet(args.modeldir())
 	.select("movieVector", "movieId")
 	.join(filtered_df, Seq("movieId"), "inner")
-	.map(row => (row.getAs[Int]("userId"), row.getAs[DenseVector]("movieVector")))
+	.map(row => (row.getAs[Int]("userId"), row.getAs[WrappedArray[Float]]("movieVector").toArray.map(_.toDouble)))
 	.rdd
 	.groupByKey
 	.collectAsMap
@@ -80,7 +82,7 @@ import spark.implicits._
 	movie_vectors.foreach(key => 
 	{
 		fileWriter.write("***\n")
-		key._2.foreach(vector => fileWriter.write(vector.toArray.mkString(" ") + "\n"))
+		key._2.foreach(vector => fileWriter.write(vector.mkString(" ") + "\n"))
 	})
 	
     fileWriter.close()	
