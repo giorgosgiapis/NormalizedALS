@@ -21,7 +21,7 @@ class ConfMovieLensZScoreALS(args: Seq[String]) extends ScallopConf(args) {
   val size = opt[String](descr = "MoviLens dataset (small/large)", required = false, default = Some("small"))
   val rank = opt[Int](descr = "ALS rank", required = false, default = Some(6))
   val runs = opt[Int](descr = "Number of runs for ALS", required = false, default = Some(1))
-  val modeldir = opt[String](descr = "Output directory for the model", required = false, default = Some(""))
+  val modeldir = opt[String](descr = "Output directory for the model", required = true)
   verify()
 }
 
@@ -202,9 +202,13 @@ spark.conf.set("spark.executor.memory", "4g")
       log.info(s"ALS Run $run")
       val Array(training, testing) = normalized_df.randomSplit(Array(ratio, 1 - ratio))
       val model = als.fit(training)
-	  if(run == runs && !(args.modeldir().isEmpty))
-		model.itemFactors.map(row => (row.getAs[Int]("id"), new DenseVector(row.getAs[WrappedArray[Float]]("features").toArray.map(_.toDouble)))).rdd.saveAsObjectFile(args.modeldir() + "/moviefactors.obj")
-	  
+	  if(run == runs)
+	  {
+		model.itemFactors.withColumnRenamed("id", "movieId")
+		.withColumnRenamed("features", "movieVectors")
+		.join(movieStats, Seq("movieId"), "inner")
+		.write.parquet(args.modeldir())
+	  }
 	  
       val predictions = model.transform(testing)
       val raw_predictions = predictions

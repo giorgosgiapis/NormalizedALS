@@ -66,15 +66,12 @@ import spark.implicits._
 	val broadcastTopUsers = spark.sparkContext.broadcast(topUsers)
 	val is_top_user = udf((value: Int) => broadcastTopUsers.value.contains(value))
 	val filtered_df = df.filter(is_top_user($"userId"))
-	.map(row => (row.getAs[Int]("movieId"), row.getAs[Int]("userId")))
+		
+	val movie_vectors = spark.read.parquet(args.modeldir())
+	.select("movieVector", "movieId")
+	.join(filtered_df, Seq("movieId"), "inner")
+	.map(row => (row.getAs[Int]("userId"), row.getAs[DenseVector]("movieVector")))
 	.rdd
-	
-	filtered_df.map(foo => (foo._2, 1)).reduceByKey(_+_).collect.foreach(x=>println(""+x))
-	
-	val movie_vectors = spark.sparkContext
-	.objectFile[(Int, DenseVector)](args.modeldir() + "/moviefactors.obj")
-	.join(filtered_df)
-	.map(x => (x._2._2, x._2._1))
 	.groupByKey
 	.collectAsMap
 	

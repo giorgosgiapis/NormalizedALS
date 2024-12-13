@@ -25,7 +25,7 @@ class ConfRunInference(args: Seq[String]) extends ScallopConf(args) {
   val size = opt[String](descr = "MoviLens dataset (small/large)", required = false, default = Some("small"))
   val modeldir = opt[String](descr = "Where the model is stored", required = true)
   val userids = opt[String](descr = "User IDs, separated by a comma", required = true)
-  val bval       = opt[Double](descr = "The value of the diversification parameter", required = false, default = Some(0.5)
+  val bval       = opt[Double](descr = "The value of the diversification parameter", required = false, default = Some(0.5))
   val number       = opt[Int](descr = "The number of recommendations to be made for every user", required = false, default = Some(5))
   verify()
 }
@@ -62,7 +62,7 @@ object RunInference {
 	.map(x=>x.toInt)
 	.toSet
 	.toArray
-	.sort
+	.sorted
 	
 	val user_indices = Map((0 until users.length).map(i => (users(i),i)): _*) // Map userId -> index in users
 	
@@ -75,11 +75,12 @@ object RunInference {
 	users.foreach(user => {require(df.filter($"userId" === user).count() > 0, "User id " + user + " not found")})
 	
 	// Load the movie vectors
-	val movie_vectors = spark.sparkContext
-	.objectFile[(Int, DenseVector)](args.modeldir() + "/moviefactors.obj").toDF("movieId", "movieVector")
+	val movie_vectors = spark.read.parquet(args.modeldir())
 
-	val is_good_user = udf((value: Int) => users.contains(value)) 
-	
+	val is_good_user = udf((user: Int) => users.contains(user)) 
+
+	val normalize_rating = udf((rating: Double, mean: Double, std: Double) => (rating - mean)/std)
+
 	val ratings = df.select("movieId", "userId", "rating")
 	val ratings_with_vectors = ratings.join(movie_vectors, Seq("movieId"), "inner")
 	val filtered_ratings_with_vectors = ratings_with_vectors.filter(is_good_user($"userId"))
@@ -89,13 +90,14 @@ object RunInference {
 	{
 		val user_df = filtered_ratings_with_vectors
 		.filter($"userId" === user)
-		.select("movieVector", "rating")
+		.withColumn("normalizedRating", normalize_rating($"rating", $"mean", $"std"))
+		.select("movieVector", "normalizedRating")
 
 		new DenseVector(new LinearRegression()
 		.setMaxIter(20)  
 		.setRegParam(0.2)
 		.setFitIntercept(false)
-		.setLabelCol("rating")
+		.setLabelCol("normalizedRating")
 		.setFeaturesCol("movieVector")
 		.fit(user_df)
 		.coefficients
@@ -145,8 +147,8 @@ object RunInference {
 	val N = args.number()
 	val g_udf = udf(g)
 	
-	val predict_movie_rating = (userId: Int, movieVector: DenseVector) => Math.min(Math.max(Math.round(dot_product(user_vectors(user_indices(userId)), movieVector)*2)/2, 5.0), 1.0)
-	val score_movie = udf((userId: Int, movieVector: DenseVector, pdf: Double) => predict_movie_rating(userId, movieVector) - B * Math.log(pdf + epsilon))
+	val predict_movie_rating = (userId: Int, movieVector: DenseVector, moviemean: Double, moviestd: Double) => Math.min(Math.max(Math.round(moviemean + moviestd* dot_product(user_vectors(user_indices(userId)), movieVector)*2)/2, 1.0), 5.0)
+	val score_movie = udf((userId: Int, movieVector: DenseVector, pdf: Double, moviemean: Double, moviestd: Double) => predict_movie_rating(userId, movieVector, moviemean, moviestd) - B * Math.log(pdf + epsilon))
 	
 	
 	val movie_scores = model.approxSimilarityJoin(model.transform(normalized_rated_movie_vectors), model.transform(normalized_movie_vectors), d_0)
@@ -155,10 +157,12 @@ object RunInference {
 	.withColumn("ratedMovieId", col("datasetA.movieId"))
 	.withColumn("movieId", col("datasetB.movieId"))
 	.withColumn("movieVector", col("datasetB.movieVector"))
-	.select("g_value", "ratedMovieId", "movieId", "movieVector")
+	.withColumn("mean", col("datasetB.mean"))
+	.withColumn("std", col("datasetB.std"))
+	.select("g_value", "ratedMovieId", "movieId", "movieVector", "mean", "std")
 	// After the next step, the df contains movieId, ratedMovieId, userId, g_value, movieVector 
 	.join(filtered_ratings_with_vectors.select("movieId", "userId").withColumnRenamed("movieId", "ratedMovieId"), Seq("ratedMovieId"), "inner") 
-	.select("userId", "movieId", "movieVector", "ratedMovieId", "g_value")
+	.select("userId", "movieId", "movieVector", "ratedMovieId", "g_value", "mean", "std")
 	// Add a dummy entry for every movie/user pair so they are all present in the resulting df after we reduce over g_value
 	.union(users.toSeq.toDF("userId").crossJoin(movie_vectors).withColumn("g_value", lit(0.0)).withColumn("ratedMovieId", lit(0)).select("userId", "movieId", "movieVector", "ratedMovieId", "g_value"))
 	// We use a left join to delete the user/movie pairs which correspond to known ratings (and which the user has already seen)
@@ -168,7 +172,7 @@ object RunInference {
 	.groupBy("userId", "movieId", "movieVector")
 	.agg(sum("g_value").alias("unnormalized_pdf"))
 	.withColumn("pdf", col("unnormalized_pdf") / rating_counts_udf($"userId"))
-	.withColumn("movieScore", score_movie($"userId", $"movieVector", $"pdf"))
+	.withColumn("movieScore", score_movie($"userId", $"movieVector", $"pdf", $"mean", $"std"))
 	.select("userId", "movieId", "movieScore")
 	.withColumn("rowNumber", row_number().over(window))
 	.filter($"rowNumber" <= N)
