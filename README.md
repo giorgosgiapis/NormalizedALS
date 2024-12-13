@@ -66,7 +66,7 @@ information content.
 appropriate dataset and move it to HDFS (if it is not already there). This is taken care of by the scripts 
 `download_data.sh` and `move_data_to_hdfs.sh`.
 - You may need to increase your stack size to avoid a `StackOverflowError`. To do this locally, run
-`ulimit -s unlimited`. Note that common users do not have the permissions to do this on student, but it is possible on datasci. When running on the cluster, add `--conf "spark.executor.extraJavaOptions=-Xss10000000m"` argument 
+`ulimit -s unlimited`. Note that common users do not have the permissions to do this on student, but it is possible on datasci. When running on the cluster, add `--conf "spark.executor.extraJavaOptions=-Xss10000000m"` and `--conf "spark.driver.extraJavaOptions=-Xss10000000m"`argument 
 in the `spark-submit` command (**before** `target/project-1.0.jar`). This ensures that the stack size of the worker nodes 
 is big enough for the code to run without causing a `StackOverflowError`.
 

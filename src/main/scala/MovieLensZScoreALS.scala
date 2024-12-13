@@ -205,7 +205,7 @@ spark.conf.set("spark.executor.memory", "4g")
 	  if(run == runs)
 	  {
 		model.itemFactors.withColumnRenamed("id", "movieId")
-		.withColumnRenamed("features", "movieVectors")
+		.withColumnRenamed("features", "movieVector")
 		.join(movieStats, Seq("movieId"), "inner")
 		.write.parquet(args.modeldir())
 	  }
