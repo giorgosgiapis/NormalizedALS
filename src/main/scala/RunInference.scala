@@ -13,6 +13,8 @@ import org.apache.spark.ml.feature.BucketedRandomProjectionLSH
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.ml.linalg.DenseVector
+import scala.collection.mutable.WrappedArray
+
 
 
 import java.io.{BufferedWriter, FileWriter}
@@ -74,15 +76,20 @@ object RunInference {
 	// Check that all the user Ids that were given are in the database
 	users.foreach(user => {require(df.filter($"userId" === user).count() > 0, "User id " + user + " not found")})
 	
+	val unpack_vector = udf((vector: WrappedArray[Float]) => new DenseVector(vector.toArray.map(_.toDouble)))
+
 	// Load the movie vectors
 	val movie_vectors = spark.read.parquet(args.modeldir())
-
+	.withColumn("movieVector", unpack_vector($"movieVector"))
+	
 	val is_good_user = udf((user: Int) => users.contains(user)) 
 
 	val normalize_rating = udf((rating: Double, mean: Double, std: Double) => (rating - mean)/std)
 
 	val ratings = df.select("movieId", "userId", "rating")
 	val ratings_with_vectors = ratings.join(movie_vectors, Seq("movieId"), "inner")
+	
+	
 	val filtered_ratings_with_vectors = ratings_with_vectors.filter(is_good_user($"userId"))
 	
 	/**** Computing the user vectors ****/
@@ -92,6 +99,7 @@ object RunInference {
 		.filter($"userId" === user)
 		.withColumn("normalizedRating", normalize_rating($"rating", $"mean", $"std"))
 		.select("movieVector", "normalizedRating")
+		
 
 		new DenseVector(new LinearRegression()
 		.setMaxIter(20)  
@@ -157,12 +165,10 @@ object RunInference {
 	.withColumn("ratedMovieId", col("datasetA.movieId"))
 	.withColumn("movieId", col("datasetB.movieId"))
 	.withColumn("movieVector", col("datasetB.movieVector"))
-	.withColumn("mean", col("datasetB.mean"))
-	.withColumn("std", col("datasetB.std"))
-	.select("g_value", "ratedMovieId", "movieId", "movieVector", "mean", "std")
+	.select("g_value", "ratedMovieId", "movieId", "movieVector")
 	// After the next step, the df contains movieId, ratedMovieId, userId, g_value, movieVector 
 	.join(filtered_ratings_with_vectors.select("movieId", "userId").withColumnRenamed("movieId", "ratedMovieId"), Seq("ratedMovieId"), "inner") 
-	.select("userId", "movieId", "movieVector", "ratedMovieId", "g_value", "mean", "std")
+	.select("userId", "movieId", "movieVector", "ratedMovieId", "g_value")
 	// Add a dummy entry for every movie/user pair so they are all present in the resulting df after we reduce over g_value
 	.union(users.toSeq.toDF("userId").crossJoin(movie_vectors).withColumn("g_value", lit(0.0)).withColumn("ratedMovieId", lit(0)).select("userId", "movieId", "movieVector", "ratedMovieId", "g_value"))
 	// We use a left join to delete the user/movie pairs which correspond to known ratings (and which the user has already seen)
@@ -172,6 +178,7 @@ object RunInference {
 	.groupBy("userId", "movieId", "movieVector")
 	.agg(sum("g_value").alias("unnormalized_pdf"))
 	.withColumn("pdf", col("unnormalized_pdf") / rating_counts_udf($"userId"))
+	.join(movie_vectors.drop("movieVector"), Seq("movieId"), "inner") // Inject back means and stds
 	.withColumn("movieScore", score_movie($"userId", $"movieVector", $"pdf", $"mean", $"std"))
 	.select("userId", "movieId", "movieScore")
 	.withColumn("rowNumber", row_number().over(window))
